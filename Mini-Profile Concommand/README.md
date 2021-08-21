@@ -1,6 +1,5 @@
 # Mini-Profile Concommand
-`Chromium branch is required`
-Adds a console command that shows the mini-profile of a steam account
+Adds a console command that shows the mini-profile of a steam account `Chromium branch is required`
 
 ```lua
 show_mini_profile <steam id>
