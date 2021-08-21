@@ -1,5 +1,6 @@
 -- mini_profile.lua by Bonyoze
 
+local hasChromium = BRANCH == "chromium" or BRANCH == "x86-64"
 local frame
 
 local function openMiniProfile(id)
@@ -46,7 +47,7 @@ local function openMiniProfile(id)
 
     html:AddFunction("miniprofile", "cancel", function(name, w, h) -- html has invalid data (probably from using a non-existing steam acc)
       frame:Remove()
-      MsgN("Failed to open mini profile (invalid steam account)")
+      MsgN("show_mini_profile: Failed to open mini profile (invalid steam account)")
     end)
 
     -- setup mini profile html
@@ -92,15 +93,16 @@ local function openMiniProfile(id)
       if code == 200 then
         setupFrame(body)
       else
-        MsgN("Failed to open mini profile (" .. code .. ")")
+        MsgN("show_mini_profile: Failed to open mini profile (" .. code .. ")")
       end
     end,
     function(err)
-      MsgN("Failed to open mini profile (" .. err .. ")")
+      MsgN("show_mini_profile: Failed to open mini profile (" .. err .. ")")
     end
   )
 end
 
 concommand.Add("show_mini_profile", function(ply, cmd, args, argStr)
+  if not hasChromium then return MsgN("show_mini_profile: This command only functions on a chromium branch!") end
   if ply:IsValid() then openMiniProfile(argStr != "" and argStr or ply:SteamID()) end
 end)
