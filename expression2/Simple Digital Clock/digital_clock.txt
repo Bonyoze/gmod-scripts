@@ -1,6 +1,6 @@
 @name Digital Clock
 @persist Mdls:array
-
+# Made by Bonyoze
 if (first()) {
     holoCreate(0, entity():pos() + entity():up() * 20.5, vec(0.5, 0.03, 0.5), entity():angles() + ang(0, -90, 0))
     holoMaterial(0, "debug/debugdrawflat")
@@ -57,11 +57,11 @@ if (first()) {
             Mdls:pushString(numModel(Min))
         }
         
-        for (I=1, 4) {
+        for (I = 1, 4) {
             holoModel(I,Mdls[I,string])
             holoBodygroup(I, 0, 3)
-            holoModel(I+4,Mdls[I,string])
-            holoBodygroup(I+4, 0, 3)
+            holoModel(I + 4,Mdls[I,string])
+            holoBodygroup(I + 4, 0, 3)
         }
         if (time("sec") % 2 == 0) {
             holoAlpha(0, 255)
