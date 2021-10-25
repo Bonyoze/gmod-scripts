@@ -1,0 +1,79 @@
+@name Digital Clock
+@persist Mdls:array
+
+if (first()) {
+    holoCreate(0, entity():pos() + entity():up() * 20.5, vec(0.5, 0.03, 0.5), entity():angles() + ang(0, -90, 0))
+    holoMaterial(0, "debug/debugdrawflat")
+    holoModel(0, "models/sprops/misc/alphanum/alphanum_colon.mdl")
+    holoBodygroup(0, 0, 3)
+    holoParent(0, entity())
+    
+    local Pos = array(8.5, 4, -4, -8.5)
+    
+    # digits side 1
+    for (I = 1, 4) {
+        holoCreate(I, entity():pos() + entity():right() * Pos[I,number] + entity():up() * 20 + entity():forward() * 0.1, vec(0.5, 0, 0.5), entity():angles() + ang(0, -90, 0))
+        holoMaterial(I, "debug/debugdrawflat")
+        holoParent(I, entity())
+    }
+    
+    # digits side 2
+    for (I = 1, 4) {
+        holoCreate(I + 4, entity():pos() + entity():right() * -Pos[I,number] + entity():up() * 20 + entity():forward() * -0.1, vec(0.5, 0, 0.5), entity():angles() + ang(0, 90, 0))
+        holoMaterial(I + 4, "debug/debugdrawflat")
+        holoParent(I + 4, entity())
+    }
+    
+    # base
+    holoCreate(9, entity():pos() + entity():up() * 20,vec(1.9, 0, 0.7), entity():angles() + ang(0, -90, 0))
+    holoColor(9, vec())
+    holoMaterial(9, "debug/debugdrawflat")
+    holoModel(9, "hq_rcube_thin")
+    holoParent(9, entity())
+    
+    function string numModel(Num) {
+        return "models/sprops/misc/alphanum/alphanum_" + clamp(Num ,0, 9) + ".mdl"
+    }
+    
+    function updateClock() {
+        Hr = (time("hour") + 7) % 12 + 1
+        Min = time("min") % 60
+        
+        Mdls:clear()
+        
+        if (Hr > 9) {
+            Mdls:pushString(numModel(Hr:toString():sub(1, 1):toNumber()))
+            Mdls:pushString(numModel(Hr:toString():sub(2, 2):toNumber()))
+        } else {
+            Mdls:pushString(numModel(0))
+            Mdls:pushString(numModel(Hr))
+        }
+        
+        if (Min > 9) {
+            Mdls:pushString(numModel(Min:toString():sub(1, 1):toNumber()))
+            Mdls:pushString(numModel(Min:toString():sub(2, 2):toNumber()))
+        } else {
+            Mdls:pushString(numModel(0))
+            Mdls:pushString(numModel(Min))
+        }
+        
+        for (I=1, 4) {
+            holoModel(I,Mdls[I,string])
+            holoBodygroup(I, 0, 3)
+            holoModel(I+4,Mdls[I,string])
+            holoBodygroup(I+4, 0, 3)
+        }
+        if (time("sec") % 2 == 0) {
+            holoAlpha(0, 255)
+        } else {
+            holoAlpha(0, 0)
+        }
+        
+    }
+    
+    updateClock()
+}
+
+interval(1000)
+
+updateClock()
