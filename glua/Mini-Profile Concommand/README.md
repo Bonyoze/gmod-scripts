@@ -1,5 +1,5 @@
 # Mini-Profile Concommand
-`'chromium' or 'x86-64' branch is required`
+`chromium` or `x86-64` branch is required
 
 Adds a console command that shows the mini-profile of a steam account
 
