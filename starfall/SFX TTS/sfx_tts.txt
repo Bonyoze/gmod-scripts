@@ -1,0 +1,426 @@
+--@name SFX TTS
+--@author Bonyoze
+--@shared
+
+// WORK IN PROGRESS
+// v0.0.0 10/28/2021
+
+// Bass manipulating
+local _VOLUME = 10 // 1 - 10
+local _PITCH = 1 // 1 - 200
+
+// TTS voice settings
+local _TTS_ENGINE = 4
+local _TTS_VOICE = 5 // daniel
+local _TTS_LANG = 1 // en
+
+// probably shouldn't modify these
+local _DIR = "sfx_tts"
+local _PREFIX = "1234"
+local _BASS_MAX = 20 // (20 is the default for sf_bass_max_cl)
+
+if SERVER then
+    local audioCache = {}
+    
+    local streamQueue, awaitingReqs, requests = {}, {}, {}
+    
+    function handleFileSending()
+        for k, v in pairs(awaitingReqs) do
+            if not audioCache[k] then return end
+        
+            local clients = {}
+            
+            for kk, vv in pairs(v) do // take out ready clients
+                if not vv:isValid() then
+                    table.remove(v, kk)
+                elseif vv.ready then
+                    table.insert(clients, vv)
+                    table.remove(v, kk)
+                    vv.ready = false
+                end
+            end
+            
+            if #clients > 0 then
+                local fileInfo = bit.compress(k)
+                
+                net.start("fileInfo")
+                    net.writeData(fileInfo, #fileInfo)
+                net.send(clients, false)
+                
+                net.start("fileData")
+                    net.writeStream(audioCache[k])
+                net.send(clients, false)
+            end
+        end
+    end
+    
+    hook.add("PlayerSay", "", function(ply, text)
+        if ply == owner() then
+            net.start("say")
+                net.writeString(text)
+            net.send(owner(), false)
+            //return ""
+        end
+    end)
+    
+    net.receive("tts", function(len)
+        net.start("tts")
+            net.writeData(net.readData(len), len)
+        net.send(find.allPlayers(), false)
+    end)
+    
+    net.receive("request", function(len, ply)
+        local data = net.readData(len)
+        
+        local tbl = bit.stringToTable(bit.decompress(data))
+        
+        for k, v in pairs(tbl) do
+            if not awaitingReqs[v] and not requests[v] then
+                requests[v] = true
+            end
+                
+            if not awaitingReqs[v] then
+                awaitingReqs[v] = {}
+            end
+            table.insert(awaitingReqs[v], ply)
+        end
+    end)
+    
+    local lastFileName
+    
+    net.receive("fileInfo", function(len)
+        lastFileName = bit.decompress(net.readData(len))
+    end)
+    
+    net.receive("fileData", function(len)
+        net.readStream(function(stream)
+            audioCache[lastFileName] = stream
+            
+            handleFileSending()
+            
+            net.start("ready")
+            net.send(owner(), false)
+        end)
+    end)
+    
+    net.receive("ready", function(_, ply)
+        ply.ready = true
+    end)
+    
+    timer.create("handleReqs", 0, 0, function()
+        local reqs = table.getKeys(requests)
+        if #reqs == 0 then return end
+        
+        local req = reqs[1]
+        if audioCache[req] then
+            handleFileSending()
+        else
+            local data = bit.compress(req)
+            
+            net.start("request")
+                net.writeData(data, #data)
+            net.send(owner(), false)
+        end
+        
+        requests[req] = nil
+    end)
+    
+    timer.create("handleFileSending", 0, 0, handleFileSending)
+    
+    net.receive("test", function(len, ply)
+        print(ply, net.readString())
+    end)
+else
+    local ttsQueue, bassQueue = {}, {}
+    
+    local function playNextInQueue()
+        if #bassQueue == 0 then return end
+            
+        local item = bassQueue[1]
+        
+        local function handleBass(snd, err, msg)
+            if snd then
+                snd:setPos(owner():getPos())
+                snd:setVolume(_VOLUME)
+                snd:setPitch(_PITCH)
+                snd:play()
+                     
+                timer.simple(snd:getLength() * (1 / _PITCH) / 1.5, function()
+                    playNextInQueue()
+                end)
+                    
+                timer.simple(snd:getLength() * (1 / _PITCH), function()
+                    snd:stop()
+                end)
+            else
+                print("BASS ERROR: ", err, msg)
+                playNextInQueue()
+            end
+        end
+        
+        local filePath
+        
+        if player() == owner() and file.exists(_DIR .. "/samples/" .. item .. ".mp3") then
+            filePath = "data/sf_filedata/" .. _DIR .. "/samples/" .. item .. ".mp3"
+        else
+            filePath = file.existsTemp(_PREFIX .. "_" .. item .. ".mp3")
+        end
+        
+        bass.loadFile(filePath, "3d", handleBass)
+        
+        table.remove(bassQueue, 1)
+    end
+    
+    local function listMissingAudio(data)
+        local hash = {}
+            
+        for k, v in pairs(data) do
+            if not hash[v] and not (player() == owner() and file.exists(_DIR .. "/samples/" .. v .. ".mp3")) and not file.existsTemp(_PREFIX .. "_" .. v .. ".mp3") then
+                hash[v] = true
+            end
+        end
+        
+        return table.getKeys(hash)
+    end
+    
+    local function handleTTS()
+        if #ttsQueue == 0 then return end
+            
+        local item = ttsQueue[1]
+        
+        if #listMissingAudio(item) != 0 then return end
+        
+        table.add(bassQueue, item)
+            
+        if bass.soundsLeft() == _BASS_MAX then
+            playNextInQueue()
+        end
+            
+        table.remove(ttsQueue, 1)
+    end
+
+    if player() == owner() then
+        file.createDir(_DIR)
+        file.createDir(_DIR .. "/samples")
+        if not file.exists(_DIR .. "/aliases.json") then file.write(_DIR .. "/aliases.json", json.encode({}, true)) end
+        
+        local aliasData, aliasList, aliasLookup = json.decode(file.read(_DIR .. "/aliases.json")), {}, {}
+        
+        for k, v in pairs(aliasData) do // reformat alias data
+            for kk, vv in ipairs(v) do
+                table.insert(aliasList, "" .. vv)
+                aliasLookup[string.lower(vv)] = "" .. k
+            end
+        end
+        
+        table.sort(aliasList, function(a, b) return #a > #b end)
+        
+        local canStream = true
+        local httpQueue, streamQueue, fileRequests = {}, {}, {}
+        
+        local function generateVoiceHash(text)
+            local fragments = {
+                "<engineID>" .. _TTS_ENGINE .. "</engineID>",
+                "<voiceID>" .. _TTS_VOICE .. "</voiceID>",
+                "<langID>" .. _TTS_LANG .. "</langID>",
+                "<ext>mp3</ext>",
+                text
+            }
+            
+            return bit.md5(table.concat(fragments, ""))
+        end
+            
+        local function buildVoiceURL(hash, text)
+            return "https://cache-a.oddcast.com/c_fs/"
+                .. hash
+                ..  ".mp3?engine=" .. _TTS_ENGINE
+                .. "&voice=" .. _TTS_VOICE
+                .. "&language=" .. _TTS_LANG
+                .. "&text=" .. http.urlEncode(text)
+        end
+        
+        function handleStreams()
+            if #streamQueue == 0 or not canStream then return end
+            
+            local name = streamQueue[1]
+            
+            local fileInfo, fileData = bit.compress(name), file.read(_DIR .. "/samples/" .. name .. ".mp3") or file.readTemp(_PREFIX .. "_" .. name .. ".mp3")
+            
+            net.start("fileInfo")
+                net.writeData(fileInfo, #fileInfo)
+            net.send(nil, false)
+            
+            net.start("fileData")
+                net.writeStream(fileData)
+            net.send(nil, false)
+            
+            table.remove(streamQueue, 1)
+            canStream = false
+        end
+        
+        local function checkFileReq(name)
+            for k, v in pairs(fileRequests) do
+                if v == name then
+                    table.insert(streamQueue, v)
+                    table.remove(fileRequests, k)
+                    handleStreams()
+                    return
+                end
+            end
+        end
+        
+        function handleHttpReqs()
+            if #httpQueue == 0 or not http.canRequest() then return end
+            
+            local item = httpQueue[1]
+            
+            http.get(buildVoiceURL(item.hash, item.text),
+                function(body)
+                    file.writeTemp(_PREFIX .. "_" .. item.hash .. ".mp3", body)
+                    
+                    checkFileReq(item.hash)
+                    handleHttpReqs()
+                end,
+                function(err)
+                    print("HTTP ERROR: ", err)
+                    handleHttpReqs()
+                end
+            )
+            
+            table.remove(httpQueue, 1)
+        end
+        
+        local function parseText(text)
+            local samples = {}
+            for k, v in ipairs(aliasList) do
+                local pos
+                repeat
+                    pos = string.find(text, v, 0, true)
+                    if pos then
+                        text = string.sub(text, 0, pos - 1) .. string.rep(" ", #v) .. string.sub(text, pos + #v)
+                        table.insert(samples, {
+                            str = v,
+                            pos = pos
+                        })
+                    end
+                until not pos
+            end
+            
+            table.sort(samples, function(a, b) return a.pos < b.pos end)
+            
+            local textLen = #text
+            local list = {}
+            for k, v in ipairs(samples) do
+                local before = string.trim(string.sub(text, 0, v.pos - 1 - (textLen - #text)))
+                
+                if #before > 0 then
+                    table.insert(list, {
+                        type = "voice",
+                        hash = generateVoiceHash(before),
+                        text = before
+                    })
+                end
+                table.insert(list, {
+                    type = "sample",
+                    name = aliasLookup[v.str]
+                })
+                
+                text = string.sub(text, v.pos - (textLen - #text) + #v.str)
+            end
+            
+            local last = string.trim(text)
+            if #last > 0 then
+                table.insert(list, {
+                    type = "voice",
+                    hash = generateVoiceHash(last),
+                    text = last
+                })
+            end
+            
+            return list
+        end
+        
+        local function tts(text)
+            local parsed = parseText(text)
+            
+            for k, v in pairs(parsed) do
+                if v.type == "voice" and not file.existsTemp(_PREFIX .. "_" .. v.hash .. ".mp3") then
+                    table.insert(httpQueue, v)
+                    handleHttpReqs()
+                end
+                // simplify values for the net message data
+                parsed[k] = v.name or v.hash
+            end
+            
+            local data = bit.compress(bit.tableToString(parsed))
+            
+            net.start("tts")
+                net.writeData(data, #data)
+            net.send(nil, false)
+        end
+        
+        net.receive("say", function()
+            tts(net.readString())
+        end)
+        
+        net.receive("request", function(len)
+            local data = bit.decompress(net.readData(len))
+            
+            if file.exists(_DIR .. "/samples/" .. data .. ".mp3") or file.existsTemp(_PREFIX .. "_" .. data .. ".mp3") then
+                table.insert(streamQueue, data)
+                handleStreams()
+            else
+                table.insert(fileRequests, data)
+            end
+        end)
+        
+        net.receive("ready", function()
+            canStream = true
+        end)
+    else
+        local lastFileName
+    
+        net.receive("fileInfo", function(len)
+            lastFileName = bit.decompress(net.readData(len))
+        end)
+        
+        net.receive("fileData", function(len)
+            net.readStream(function(stream)
+                file.writeTemp(_PREFIX .. "_" .. lastFileName .. ".mp3", stream)
+                
+                net.start("ready")
+                net.send(nil, false)
+            end)
+        end)
+        
+        net.start("ready")
+        net.send(nil, false)
+    end
+    
+    timer.create("handleQueues", 0, 0, function()
+        if player() == owner() then
+            handleStreams()
+            handleHttpReqs()
+        end
+        handleTTS()
+    end)
+    
+    net.receive("tts", function(len)
+        local data = bit.stringToTable(bit.decompress(net.readData(len)))
+        
+        table.insert(ttsQueue, data)
+        handleTTS()
+        
+        if player() != owner() then
+            local missingList = listMissingAudio(data)
+            
+            if #missingList > 0 then
+                local missingData = bit.compress(bit.tableToString(missingList))
+                    
+                net.start("request")
+                    net.writeData(missingData, #missingData)
+                net.send(nil, false)
+            end
+        end
+    end)
+end
