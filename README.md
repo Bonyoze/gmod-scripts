@@ -10,7 +10,7 @@ A repository where I'll be putting some of my public expression 2, starfall and 
 <details>
   <summary>Starfall</summary>
   
-  + [Bon TTS](https://github.com/Bonyoze/gmod-scripts/tree/main/starfall/Bon%20TTS)
+  + [SFX TTS](https://github.com/Bonyoze/gmod-scripts/tree/main/starfall/SFX%20TTS)
 </details>
 
 <details>
