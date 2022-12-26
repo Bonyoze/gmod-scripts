@@ -4,10 +4,10 @@
 
 -- v1.0.0 12/25/2022
 
-local HIDE_CHAT = true -- true/false
+local HIDE_CHAT = false -- true/false
 
 -- voice settings
-local TTS_MODE = 2 -- which TTS voice api should be used (Oddcast = 0, DECTalk = 1, Tik Tok = 2)
+local TTS_MODE = 0 -- which TTS voice api should be used (Oddcast = 0, DECTalk = 1, Tik Tok = 2)
 local VOLUME = 10 -- 0 - 10
 local PITCH = 1 -- 0 - 100
 
@@ -22,7 +22,7 @@ local ODDCAST_LANG = 1
 -- https://pastebin.com/kJYDfKdP
 -- please do not paste your session id in this script, instead paste it in a file relative to data/sf_filedata
 local TIKTOK_SESSION_FILE = "tiktok_sessionid.txt"
-local TIKTOK_VOICE = "en_us_001"
+local TIKTOK_VOICE = "en_male_m03_lobby"
 
 -- probably shouldn't modify these
 local DIR = "sfx_tts" -- directory for the script (relative to data/sf_filedata)
@@ -231,11 +231,11 @@ else
         local function generateVoiceHash(text)
             local salt = ""
             if TTS_MODE == 0 then
-                salt = "oddcast"
+                salt = "oddcast" .. ODDCAST_ENGINE .. ODDCAST_VOICE .. ODDCAST_LANG
             elseif TTS_MODE == 1 then
                 salt = "dectalk"
             elseif TTS_MODE == 2 then
-                salt = "tiktok"
+                salt = "tiktok" .. TIKTOK_VOICE
             else
                 error("unknown TTS mode")
             end
@@ -252,7 +252,7 @@ else
         
         -- ping Glitch project so the first Tik Tok tts usage isn't super delayed
         if TTS_MODE == 2 then
-            print("Pinging Tik Tok TTS project")
+            print("Preparing Tik Tok TTS project")
             http.get(tiktokURL,
                 function()
                     print("Tik Tok TTS is ready")
