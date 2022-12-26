@@ -2,22 +2,32 @@
 --@author Bonyoze
 --@shared
 
-// WORK IN PROGRESS
-// v0.0.0 10/28/2021
+-- v1.0.0 12/25/2022
 
-// Bass manipulating
-local _VOLUME = 10 // 1 - 10
-local _PITCH = 1 // 1 - 200
+local HIDE_CHAT = true -- true/false
 
-// TTS voice settings
-local _TTS_ENGINE = 4
-local _TTS_VOICE = 5 // daniel
-local _TTS_LANG = 1 // en
+-- voice settings
+local TTS_MODE = 2 -- which TTS voice api should be used (Oddcast = 0, DECTalk = 1, Tik Tok = 2)
+local VOLUME = 10 -- 0 - 10
+local PITCH = 1 -- 0 - 100
 
-// probably shouldn't modify these
-local _DIR = "sfx_tts"
-local _PREFIX = "1234"
-local _BASS_MAX = 20 // (20 is the default for sf_bass_max_cl)
+-- Oddcast settings
+-- https://pastebin.com/gysiJGGH
+-- im too lazy to organize all the voices into a nice spreadsheet right now
+local ODDCAST_ENGINE = 4
+local ODDCAST_VOICE = 5
+local ODDCAST_LANG = 1
+
+-- Tik Tok settings (ACCOUNT REQUIRED)
+-- https://pastebin.com/kJYDfKdP
+-- please do not paste your session id in this script, instead paste it in a file relative to data/sf_filedata
+local TIKTOK_SESSION_FILE = "tiktok_sessionid.txt"
+local TIKTOK_VOICE = "en_us_001"
+
+-- probably shouldn't modify these
+local DIR = "sfx_tts" -- directory for the script (relative to data/sf_filedata)
+local SIGNATURE = "garry" -- unique string prepended to the temp file name (can be anything)
+local BASS_MAX = 20 -- max amount of bass objects at once before they queue (20 is the default for sf_bass_max_cl)
 
 if SERVER then
     local audioCache = {}
@@ -30,7 +40,7 @@ if SERVER then
         
             local clients = {}
             
-            for kk, vv in pairs(v) do // take out ready clients
+            for kk, vv in pairs(v) do -- take out ready clients
                 if not vv:isValid() then
                     table.remove(v, kk)
                 elseif vv.ready then
@@ -59,7 +69,7 @@ if SERVER then
             net.start("say")
                 net.writeString(text)
             net.send(owner(), false)
-            //return ""
+            if HIDE_CHAT then return "" end
         end
     end)
     
@@ -141,15 +151,15 @@ else
         local function handleBass(snd, err, msg)
             if snd then
                 snd:setPos(owner():getPos())
-                snd:setVolume(_VOLUME)
-                snd:setPitch(_PITCH)
+                snd:setVolume(VOLUME)
+                snd:setPitch(PITCH)
                 snd:play()
                      
-                timer.simple(snd:getLength() * (1 / _PITCH) / 1.5, function()
+                timer.simple(snd:getLength() * (1 / PITCH) / 1.25, function()
                     playNextInQueue()
                 end)
                     
-                timer.simple(snd:getLength() * (1 / _PITCH), function()
+                timer.simple(snd:getLength() * (1 / PITCH), function()
                     snd:stop()
                 end)
             else
@@ -160,10 +170,10 @@ else
         
         local filePath
         
-        if player() == owner() and file.exists(_DIR .. "/samples/" .. item .. ".mp3") then
-            filePath = "data/sf_filedata/" .. _DIR .. "/samples/" .. item .. ".mp3"
+        if player() == owner() and file.exists(DIR .. "/samples/" .. item .. ".mp3") then
+            filePath = "data/sf_filedata/" .. DIR .. "/samples/" .. item .. ".mp3"
         else
-            filePath = file.existsTemp(_PREFIX .. "_" .. item .. ".mp3")
+            filePath = file.existsTemp(SIGNATURE .. "_" .. item .. ".mp3")
         end
         
         bass.loadFile(filePath, "3d", handleBass)
@@ -175,7 +185,7 @@ else
         local hash = {}
             
         for k, v in pairs(data) do
-            if not hash[v] and not (player() == owner() and file.exists(_DIR .. "/samples/" .. v .. ".mp3")) and not file.existsTemp(_PREFIX .. "_" .. v .. ".mp3") then
+            if not hash[v] and not (player() == owner() and file.exists(DIR .. "/samples/" .. v .. ".mp3")) and not file.existsTemp(SIGNATURE .. "_" .. v .. ".mp3") then
                 hash[v] = true
             end
         end
@@ -192,7 +202,7 @@ else
         
         table.add(bassQueue, item)
             
-        if bass.soundsLeft() == _BASS_MAX then
+        if bass.soundsLeft() == BASS_MAX then
             playNextInQueue()
         end
             
@@ -200,13 +210,13 @@ else
     end
 
     if player() == owner() then
-        file.createDir(_DIR)
-        file.createDir(_DIR .. "/samples")
-        if not file.exists(_DIR .. "/aliases.json") then file.write(_DIR .. "/aliases.json", json.encode({}, true)) end
+        file.createDir(DIR)
+        file.createDir(DIR .. "/samples")
+        if not file.exists(DIR .. "/aliases.json") then file.write(DIR .. "/aliases.json", json.encode({}, true)) end
         
-        local aliasData, aliasList, aliasLookup = json.decode(file.read(_DIR .. "/aliases.json")), {}, {}
+        local aliasData, aliasList, aliasLookup = json.decode(file.read(DIR .. "/aliases.json")), {}, {}
         
-        for k, v in pairs(aliasData) do // reformat alias data
+        for k, v in pairs(aliasData) do -- reformat alias data
             for kk, vv in ipairs(v) do
                 table.insert(aliasList, "" .. vv)
                 aliasLookup[string.lower(vv)] = "" .. k
@@ -219,24 +229,66 @@ else
         local httpQueue, streamQueue, fileRequests = {}, {}, {}
         
         local function generateVoiceHash(text)
-            local fragments = {
-                "<engineID>" .. _TTS_ENGINE .. "</engineID>",
-                "<voiceID>" .. _TTS_VOICE .. "</voiceID>",
-                "<langID>" .. _TTS_LANG .. "</langID>",
-                "<ext>mp3</ext>",
-                text
-            }
-            
-            return bit.md5(table.concat(fragments, ""))
+            local salt = ""
+            if TTS_MODE == 0 then
+                salt = "oddcast"
+            elseif TTS_MODE == 1 then
+                salt = "dectalk"
+            elseif TTS_MODE == 2 then
+                salt = "tiktok"
+            else
+                error("unknown TTS mode")
+            end
+            -- unique to avoid using the wrong file when tts mode is changed
+            return bit.sha256(text .. salt)
         end
-            
-        local function buildVoiceURL(hash, text)
-            return "https://cache-a.oddcast.com/c_fs/"
-                .. hash
-                ..  ".mp3?engine=" .. _TTS_ENGINE
-                .. "&voice=" .. _TTS_VOICE
-                .. "&language=" .. _TTS_LANG
-                .. "&text=" .. http.urlEncode(text)
+        
+        local oddcastURL = "https://cache-a.oddcast.com/c_fs/"
+        local dectalkURL = "http://tts.cyzon.us/tts" -- thanks cyzon
+        local tiktokURL = "https://tiktok-tts-api.glitch.me/" -- setup by Bonyoze :)
+        -- (you can remix the Glitch project and change the url here if the traffic gets too bad)
+        
+        local tiktokSession = file.read(TIKTOK_SESSION_FILE)
+        
+        -- ping Glitch project so the first Tik Tok tts usage isn't super delayed
+        if TTS_MODE == 2 then
+            print("Pinging Tik Tok TTS project")
+            http.get(tiktokURL,
+                function()
+                    print("Tik Tok TTS is ready")
+                end,
+                function(err)
+                    print("Failed to ping Tik Tok TTS project")
+                    print("HTTP ERROR: ", err)
+                end
+            )
+        end
+        
+        local function buildVoiceURL(text)
+            if TTS_MODE == 0 then -- Oddcast
+                local fragments = {
+                    "<engineID>" .. ODDCAST_ENGINE .. "</engineID>",
+                    "<voiceID>" .. ODDCAST_VOICE .. "</voiceID>",
+                    "<langID>" .. ODDCAST_LANG .. "</langID>",
+                    "<ext>mp3</ext>",
+                    text
+                }
+                return oddcastURL
+                    .. bit.md5(table.concat(fragments, ""))
+                    ..  ".mp3?engine=" .. ODDCAST_ENGINE
+                    .. "&voice=" .. ODDCAST_VOICE
+                    .. "&language=" .. ODDCAST_LANG
+                    .. "&text=" .. http.urlEncode(text)
+            elseif TTS_MODE == 1 then -- DECTalk
+                return dectalkURL .. "?text=" .. http.urlEncode(text)
+            elseif TTS_MODE == 2 then -- Tik Tok
+                return tiktokURL
+                    .. "?session=" .. http.urlEncode(tiktokSession)
+                    .. "&voice=" .. http.urlEncode(TIKTOK_VOICE)
+                    .. "&text=" .. http.urlEncode(text)
+            else
+                error("unknown TTS mode")
+            end
         end
         
         function handleStreams()
@@ -244,7 +296,7 @@ else
             
             local name = streamQueue[1]
             
-            local fileInfo, fileData = bit.compress(name), file.read(_DIR .. "/samples/" .. name .. ".mp3") or file.readTemp(_PREFIX .. "_" .. name .. ".mp3")
+            local fileInfo, fileData = bit.compress(name), file.read(DIR .. "/samples/" .. name .. ".mp3") or file.readTemp(SIGNATURE .. "_" .. name .. ".mp3")
             
             net.start("fileInfo")
                 net.writeData(fileInfo, #fileInfo)
@@ -274,9 +326,9 @@ else
             
             local item = httpQueue[1]
             
-            http.get(buildVoiceURL(item.hash, item.text),
+            http.get(buildVoiceURL(item.text),
                 function(body)
-                    file.writeTemp(_PREFIX .. "_" .. item.hash .. ".mp3", body)
+                    file.writeTemp(SIGNATURE .. "_" .. item.hash .. ".mp3", body)
                     
                     checkFileReq(item.hash)
                     handleHttpReqs()
@@ -295,7 +347,7 @@ else
             for k, v in ipairs(aliasList) do
                 local pos
                 repeat
-                    pos = string.find(text, v, 0, true)
+                    pos = string.find(string.lower(text), string.lower(v), 0, true)
                     if pos then
                         text = string.sub(text, 0, pos - 1) .. string.rep(" ", #v) .. string.sub(text, pos + #v)
                         table.insert(samples, {
@@ -344,11 +396,11 @@ else
             local parsed = parseText(text)
             
             for k, v in pairs(parsed) do
-                if v.type == "voice" and not file.existsTemp(_PREFIX .. "_" .. v.hash .. ".mp3") then
+                if v.type == "voice" and not file.existsTemp(SIGNATURE .. "_" .. v.hash .. ".mp3") then
                     table.insert(httpQueue, v)
                     handleHttpReqs()
                 end
-                // simplify values for the net message data
+                -- simplify values for the net message data
                 parsed[k] = v.name or v.hash
             end
             
@@ -366,7 +418,7 @@ else
         net.receive("request", function(len)
             local data = bit.decompress(net.readData(len))
             
-            if file.exists(_DIR .. "/samples/" .. data .. ".mp3") or file.existsTemp(_PREFIX .. "_" .. data .. ".mp3") then
+            if file.exists(DIR .. "/samples/" .. data .. ".mp3") or file.existsTemp(SIGNATURE .. "_" .. data .. ".mp3") then
                 table.insert(streamQueue, data)
                 handleStreams()
             else
@@ -386,7 +438,7 @@ else
         
         net.receive("fileData", function(len)
             net.readStream(function(stream)
-                file.writeTemp(_PREFIX .. "_" .. lastFileName .. ".mp3", stream)
+                file.writeTemp(SIGNATURE .. "_" .. lastFileName .. ".mp3", stream)
                 
                 net.start("ready")
                 net.send(nil, false)
