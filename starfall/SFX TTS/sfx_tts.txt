@@ -2,7 +2,7 @@
 --@author Bonyoze
 --@shared
 
--- v1.0.0 12/25/2022
+-- v1.0.1 12/25/2022
 
 local HIDE_CHAT = false -- true/false
 
@@ -244,7 +244,7 @@ else
         end
         
         local oddcastURL = "https://cache-a.oddcast.com/c_fs/"
-        local dectalkURL = "http://tts.cyzon.us/tts" -- thanks cyzon
+        local dectalkURL = "https://tts.cyzon.us/tts" -- thanks cyzon
         local tiktokURL = "https://tiktok-tts-api.glitch.me/" -- setup by Bonyoze :)
         -- (you can remix the Glitch project and change the url here if the traffic gets too bad)
         
@@ -280,7 +280,8 @@ else
                     .. "&language=" .. ODDCAST_LANG
                     .. "&text=" .. http.urlEncode(text)
             elseif TTS_MODE == 1 then -- DECTalk
-                return dectalkURL .. "?text=" .. http.urlEncode(text)
+                return dectalkURL
+                    .. "?text=" .. http.urlEncode(text)
             elseif TTS_MODE == 2 then -- Tik Tok
                 return tiktokURL
                     .. "?session=" .. http.urlEncode(tiktokSession)
