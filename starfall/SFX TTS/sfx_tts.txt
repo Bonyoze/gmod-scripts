@@ -2,7 +2,7 @@
 --@author Bonyoze
 --@shared
 
--- v1.0.1 12/25/2022
+-- v1.0.2 12/25/2022
 
 local HIDE_CHAT = false -- true/false
 
@@ -328,11 +328,15 @@ else
             local item = httpQueue[1]
             
             http.get(buildVoiceURL(item.text),
-                function(body)
-                    file.writeTemp(SIGNATURE .. "_" .. item.hash .. ".mp3", body)
-                    
-                    checkFileReq(item.hash)
-                    handleHttpReqs()
+                function(body, _, _, code)
+                    if code == 200 then
+                        file.writeTemp(SIGNATURE .. "_" .. item.hash .. ".mp3", body)
+                        
+                        checkFileReq(item.hash)
+                        handleHttpReqs()
+                    else
+                        print("HTTP ERROR: received code ", code)
+                    end
                 end,
                 function(err)
                     print("HTTP ERROR: ", err)
