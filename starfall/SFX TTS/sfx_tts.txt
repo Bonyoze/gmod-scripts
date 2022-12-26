@@ -22,7 +22,7 @@ local ODDCAST_LANG = 1
 -- https://pastebin.com/kJYDfKdP
 -- please do not paste your session id in this script, instead paste it in a file relative to data/sf_filedata
 local TIKTOK_SESSION_FILE = "tiktok_sessionid.txt"
-local TIKTOK_VOICE = "en_male_m03_lobby"
+local TIKTOK_VOICE = "en_us_001"
 
 -- probably shouldn't modify these
 local DIR = "sfx_tts" -- directory for the script (relative to data/sf_filedata)
