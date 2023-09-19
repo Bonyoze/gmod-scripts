@@ -2,7 +2,7 @@
 --@author Bonyoze
 --@shared
 
--- v1.0.2 12/25/2022
+-- v1.0.3 9/19/2023
 
 local HIDE_CHAT = false -- true/false
 
@@ -74,12 +74,14 @@ if SERVER then
     end)
     
     net.receive("tts", function(len)
+        len = math.ceil(len / 8)
         net.start("tts")
             net.writeData(net.readData(len), len)
         net.send(find.allPlayers(), false)
     end)
     
     net.receive("request", function(len, ply)
+        len = math.ceil(len / 8)
         local data = net.readData(len)
         
         local tbl = bit.stringToTable(bit.decompress(data))
@@ -99,10 +101,12 @@ if SERVER then
     local lastFileName
     
     net.receive("fileInfo", function(len)
+        len = math.ceil(len / 8)
         lastFileName = bit.decompress(net.readData(len))
     end)
     
     net.receive("fileData", function(len)
+        len = math.ceil(len / 8)
         net.readStream(function(stream)
             audioCache[lastFileName] = stream
             
@@ -421,6 +425,7 @@ else
         end)
         
         net.receive("request", function(len)
+            len = math.ceil(len / 8)
             local data = bit.decompress(net.readData(len))
             
             if file.exists(DIR .. "/samples/" .. data .. ".mp3") or file.existsTemp(SIGNATURE .. "_" .. data .. ".mp3") then
@@ -438,10 +443,11 @@ else
         local lastFileName
     
         net.receive("fileInfo", function(len)
+            len = math.ceil(len / 8)
             lastFileName = bit.decompress(net.readData(len))
         end)
         
-        net.receive("fileData", function(len)
+        net.receive("fileData", function()
             net.readStream(function(stream)
                 file.writeTemp(SIGNATURE .. "_" .. lastFileName .. ".mp3", stream)
                 
@@ -463,6 +469,7 @@ else
     end)
     
     net.receive("tts", function(len)
+        len = math.ceil(len / 8)
         local data = bit.stringToTable(bit.decompress(net.readData(len)))
         
         table.insert(ttsQueue, data)
